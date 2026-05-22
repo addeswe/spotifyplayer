@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  spotify-stack:
+    build: .
+    container_name: spotify-stack
+
+    ports:
+      - "8080:8080"
+      - "5000:5000"
+
+
+    environment:
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET}
+
+    restart: unless-stopped

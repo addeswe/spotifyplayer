@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nu Spelar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --border: rgba(255,255,255,0.07);
+      --accent: #1DB954;
+      --text: #f0ede8;
+      --muted: rgba(240,237,232,0.4);
+      --glow: rgba(29,185,84,0.3);
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+    }
+
+    #ambient {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 30% 50%, rgba(29,185,84,0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+      transition: background 3s ease;
+    }
+
+    /* ── Card: side-by-side on desktop, stacked on mobile ── */
+    .card {
+      position: relative;
+      z-index: 1;
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr;
+      background: var(--surface);
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: rise 0.8s cubic-bezier(0.16,1,0.3,1) 0.2s forwards;
+    }
+
+    @keyframes rise {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Album art ── */
+    .art-side {
+      position: relative;
+      overflow: hidden;
+    }
+
+    #album-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transform: scale(1.04);
+      transition: transform 6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    #album-img.loaded { transform: scale(1); }
+
+    .art-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to right, transparent 50%, var(--surface) 100%);
+    }
+
+    .vinyl {
+      position: absolute;
+      bottom: 5%;
+      right: -8%;
+      width: clamp(100px, 18vw, 220px);
+      height: clamp(100px, 18vw, 220px);
+      border-radius: 50%;
+      background: conic-gradient(#1a1a1a 0deg, #2a2a2a 30deg, #1a1a1a 60deg, #222 90deg,
+        #1a1a1a 180deg, #2a2a2a 210deg, #1a1a1a 240deg, #222 270deg, #1a1a1a 360deg);
+      border: 2px solid #333;
+      opacity: 0.45;
+      animation: spin 8s linear infinite;
+      animation-play-state: paused;
+    }
+    .vinyl::after {
+      content: '';
+      position: absolute;
+      inset: 35%;
+      border-radius: 50%;
+      background: #0a0a0a;
+      border: 1px solid #333;
+    }
+    .vinyl.playing { animation-play-state: running; }
+
+    /* ── Info side ── */
+    .info-side {
+      padding: clamp(1.5rem, 4vw, 4rem) clamp(1.5rem, 4vw, 4rem) clamp(1.5rem, 3vw, 3.5rem);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+
+    .label {
+      font-size: clamp(0.55rem, 1vw, 0.75rem);
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .dot {
+      width: clamp(6px, 1vw, 9px);
+      height: clamp(6px, 1vw, 9px);
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 1.5s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .dot.paused { animation: none; background: var(--muted); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.6); }
+    }
+
+    .track-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.4em;
+    }
+
+    #track-name {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.4rem, 4vw, 4.2rem);
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.4em;
+    }
+
+    #artist-name {
+      font-size: clamp(0.6rem, 1.2vw, 1rem);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    #album-name {
+      font-size: clamp(0.6rem, 1vw, 0.9rem);
+      color: rgba(240,237,232,0.22);
+      font-style: italic;
+      font-family: 'Playfair Display', serif;
+    }
+
+    /* ── Progress ── */
+    .progress-section { margin-top: clamp(1rem, 2vw, 2rem); }
+
+    .time-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: clamp(0.55rem, 0.9vw, 0.7rem);
+      color: var(--muted);
+      margin-bottom: 0.6rem;
+      letter-spacing: 0.1em;
+    }
+
+    .progress-track {
+      height: 3px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: visible;
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 1s linear;
+      position: relative;
+    }
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      right: -4px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: clamp(6px, 1vw, 9px);
+      height: clamp(6px, 1vw, 9px);
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 12px var(--glow);
+    }
+
+    /* ── Bottom row ── */
+    .bottom-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-top: clamp(1rem, 2vw, 2.5rem);
+      gap: 1rem;
+    }
+
+    .footer {
+      font-size: clamp(0.45rem, 0.7vw, 0.6rem);
+      color: rgba(240,237,232,0.12);
+      letter-spacing: 0.1em;
+    }
+
+    /* ── QR ── */
+    .qr-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .qr-label {
+      font-size: clamp(0.4rem, 0.7vw, 0.55rem);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(240,237,232,0.22);
+    }
+
+    #qr-container {
+      width: clamp(70px, 10vw, 160px);
+      height: clamp(70px, 10vw, 160px);
+      background: #fff;
+      border-radius: 5px;
+      padding: clamp(4px, 0.5vw, 8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.88;
+      transition: opacity 0.3s ease;
+    }
+    #qr-container:hover { opacity: 1; }
+    #qr-container canvas, #qr-container img { width: 100% !important; height: 100% !important; }
+
+    /* ── Waveform ── */
+    .waveform {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: clamp(12px, 1.5vw, 18px);
+      margin-left: auto;
+    }
+    .bar {
+      width: clamp(2px, 0.3vw, 3px);
+      background: var(--accent);
+      border-radius: 1px;
+      animation: wave 1s ease-in-out infinite;
+    }
+    .bar:nth-child(1) { height: 40%;  animation-delay: 0s; }
+    .bar:nth-child(2) { height: 85%;  animation-delay: 0.1s; }
+    .bar:nth-child(3) { height: 55%;  animation-delay: 0.2s; }
+    .bar:nth-child(4) { height: 100%; animation-delay: 0.15s; }
+    .bar:nth-child(5) { height: 45%;  animation-delay: 0.05s; }
+    .waveform.paused .bar { animation: none; height: 20%; }
+
+    @keyframes wave {
+      0%, 100% { transform: scaleY(1); }
+      50% { transform: scaleY(0.25); }
+    }
+
+    /* ── Idle ── */
+    .idle-state {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100vh;
+      gap: 1.5rem;
+    }
+    .idle-icon { font-size: clamp(3rem, 8vw, 6rem); opacity: 0.12; }
+    .idle-text {
+      font-size: clamp(0.6rem, 1.2vw, 0.8rem);
+      color: var(--muted);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    /* ── Mobile: stack vertically ── */
+    @media (max-width: 640px) {
+      .card {
+        grid-template-columns: 1fr;
+        grid-template-rows: 45vh 1fr;
+      }
+
+      .art-side {
+        height: 45vh;
+      }
+
+      .art-overlay {
+        background: linear-gradient(to bottom, transparent 50%, var(--surface) 100%);
+      }
+
+      .vinyl { display: none; }
+
+      .info-side {
+        padding: 1.5rem 1.5rem 1.5rem;
+        overflow-y: auto;
+      }
+
+      #track-name { font-size: clamp(1.4rem, 7vw, 2.2rem); }
+      #artist-name { font-size: 0.7rem; }
+      #album-name  { font-size: 0.65rem; }
+
+      #qr-container {
+        width: 80px;
+        height: 80px;
+      }
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="ambient"></div>
+  <div class="card" id="card"></div>
+
+  <script>
+    const card = document.getElementById('card');
+    let progressInterval = null;
+    let currentProgress = 0;
+    let currentDuration = 1;
+    let isPlaying = false;
+
+    function formatTime(ms) {
+      const s = Math.floor(ms / 1000);
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+
+    function generateQR(url) {
+      const el = document.getElementById('qr-container');
+      if (!el) return;
+      el.innerHTML = '';
+      const size = el.offsetWidth - (parseInt(getComputedStyle(el).padding) * 2);
+      new QRCode(el, {
+        text: url,
+        width: size,
+        height: size,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+
+    function renderPlaying(data) {
+      const { track, playing, progress_ms, duration_ms } = data;
+      isPlaying = playing;
+      currentProgress = progress_ms;
+      currentDuration = duration_ms;
+
+      card.innerHTML = `
+        <div class="art-side">
+          <img id="album-img" src="${track.album_art}" alt="Album art" />
+          <div class="art-overlay"></div>
+          <div class="vinyl ${playing ? 'playing' : ''}"></div>
+        </div>
+        <div class="info-side">
+          <div class="label">
+            <span class="dot ${playing ? '' : 'paused'}"></span>
+            ${playing ? 'Spelar nu' : 'Pausad'}
+            <div class="waveform ${playing ? '' : 'paused'}">
+              <div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            </div>
+          </div>
+
+          <div class="track-info">
+            <div id="track-name">${track.name}</div>
+            <div id="artist-name">${track.artist}</div>
+            <div id="album-name">${track.album}</div>
+          </div>
+
+          <div>
+            <div class="progress-section">
+              <div class="time-row">
+                <span id="time-current">${formatTime(progress_ms)}</span>
+                <span>${formatTime(duration_ms)}</span>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" id="progress-fill"
+                  style="width:${(progress_ms / duration_ms * 100).toFixed(2)}%"></div>
+              </div>
+            </div>
+            <div class="bottom-row">
+			    <!--- <div class="footer">Uppdateras var 10:e sekund</div> --->
+              <div class="qr-section">
+                <div class="qr-label">Öppna i Spotify</div>
+                <div id="qr-container"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const img = document.getElementById('album-img');
+      img.onload = () => img.classList.add('loaded');
+
+      const url = track.spotify_url ||
+        `https://open.spotify.com/search/${encodeURIComponent(track.name + ' ' + track.artist)}`;
+      // Wait for layout so offsetWidth is correct
+      requestAnimationFrame(() => generateQR(url));
+
+      startProgressTick();
+    }
+
+    function renderIdle(msg = 'Inget spår spelas just nu') {
+      stopProgressTick();
+      card.innerHTML = `
+        <div class="idle-state">
+          <div class="idle-icon">♪</div>
+          <div class="idle-text">${msg}</div>
+        </div>
+      `;
+    }
+
+    function startProgressTick() {
+      stopProgressTick();
+      if (!isPlaying) return;
+      progressInterval = setInterval(() => {
+        currentProgress = Math.min(currentProgress + 1000, currentDuration);
+        const fill = document.getElementById('progress-fill');
+        const timeCur = document.getElementById('time-current');
+        if (fill) fill.style.width = `${(currentProgress / currentDuration * 100).toFixed(2)}%`;
+        if (timeCur) timeCur.textContent = formatTime(currentProgress);
+      }, 1000);
+    }
+
+    function stopProgressTick() {
+      if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
+    }
+
+    async function fetchNowPlaying() {
+      try {
+        const res = await fetch('/spotify/api/now-playing');
+        const data = await res.json();
+        if (data.error) { renderIdle(data.message || 'Fel vid hämtning'); return; }
+        if (data.playing === false && !data.track) { renderIdle(); return; }
+        renderPlaying(data);
+      } catch (e) {
+        renderIdle('Kunde inte nå API:et');
+      }
+    }
+
+    fetchNowPlaying();
+    setInterval(fetchNowPlaying, 10000);
+  </script>
+</body>
+</html>
+
